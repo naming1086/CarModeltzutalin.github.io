@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<title>three.js webgl - glTF loader</title>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+	<style>
+		body {
+			font-family: Monospace;
+			background-color: #000;
+			color: #fff;
+			margin: 0px;
+			overflow: hidden;
+		}
+	</style>
+
+	<link rel="stylesheet" type="text/css" href="css/style.css" />
+
+	<script type="text/javascript" src="js/jQuery.js"></script>
+	<script type="text/javascript">
+		$(function () {
+			$(".kfleft").click(function () {
+				var i = $("#haiiskefu").css("right");
+				if (i == '0px') {
+					$('#haiiskefu').animate({
+						right: -90
+					}, 200);
+				} else {
+					$('#haiiskefu').animate({
+						right: 0
+					}, 200);
+				}
+			});
+		});
+	</script>
+</head>
+
+<body>
+
+	<div id="haiiskefu">
+		<div class="kfleft" title="点击查看联系方式"></div>
+		<ul>
+			<li><a rel="nofollow" onclick="toggleButton()" target="_blank"></a></li>
+			<li><a rel="nofollow" onclick="viewSwitch()" target="_blank"></a></li>
+			<li><a rel="nofollow" onclick="TurnToBlack()" target="_blank"></a></li>
+			<li><a rel="nofollow" onclick="TurnToWhite()" target="_blank"></a></li>
+			<li><a rel="nofollow" onclick="TurnToBlue()" target="_blank"></a></li>
+			<li><a rel="nofollow" onclick="TurnToRed()" target="_blank"></a></li>
+			<li><a rel="nofollow" onclick="TurnToGold()" target="_blank"></a></li>
+		</ul>
+	</div>
+
+	<script src="js/three.js"></script>
+
+	<script src="js/OrbitControls.js"></script>
+	<script src="js/GLTFLoader.js"></script>
+
+	<script src="js/PMREMGenerator.js"></script>
+	<script src="js/tween.min.js"></script>
+
+	<script src="js/WebGL.js"></script>
+	<script src="js/Lensflare.js"></script>
+
+
+
+	<script>
+		if (WEBGL.isWebGLAvailable() === false) {
+			document.body.appendChild(WEBGL.getWebGLErrorMessage());
+		}
+
+
+		var container, controls;
+		var camera, scene, renderer, mixer, action, delta, model, texture, LogoBGtexture, skymodel;
+		var light, sunlight, pointLight, pointLight1, pointLight2;
+		var actions = [];
+		var ceilOpenActions = [];
+		var ceilActionCount = 0;
+		var doorOpenActions = [];
+		var LdoorOpenAction, LdoorCloseAction;
+		var doorActionCount = 0;
+		var RdoorOpenActions = [];
+		var RdoorActionCount = 0;
+		var RightGlassActions = [];
+		var RightGlassCount = 0;
+		var LeftGlassActions = [];
+		var LeftGlassCount = 0;
+		var ceilStatus = 0; //0 for close
+		var doorStatus = 0;
+		var RdoorStatus = 0;
+		var RGlassStatus = 0;
+		var LGlassStatus = 0;
+		var spoilerActions = [];
+		var spoilerActionCount = 0;
+		var spoilerStatus = 0;
+		var HallCube;
+		var ReflectionMaterial, CarPaintMaterial, RefractionMaterial, WheelMaterial, MirrorMaterial;
+		var lensflare;
+		var doorButton, spoilerButton, ceilButton, RdoorButton, LGlassButton, RGlassButton, ceilInCarButton, InCarLDoorButton,
+			InCarRDoorButton;
+		var raycaster, mouse;
+		var buttonTween, buttonTweenBack, inCarButtonTween, inCarButtonTweenBack;
+		var buttonStatus = 1;
+		var buttonChangeLock = 0;
+		var cameraTween, cameraTweenBack, cameraInTarget, cameraOutTarget, closeDelay;
+		var viewChangeStatus = 0;
+		var BlackMatTween, WhiteMatTween, BlueMatTween, RedMatTween, GoldMatTween;
+		var CarColor = {
+			r: 256,
+			g: 256,
+			b: 256
+		};
+
+		var clock = new THREE.Clock();
+
+		init();
+		animate();
+
+		function init() {
+
+
+			container = document.createElement('div');
+			document.body.appendChild(container);
+
+			camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 2000);
+			camera.position.set(100, 70, 200);
+
+
+
+
+			var path = "textures/cube/YardCube/";
+			var format = '.jpg';
+			var urls = [
+				path + 'px' + format, path + 'nx' + format,
+				path + 'py' + format, path + 'ny' + format,
+				path + 'pz' + format, path + 'nz' + format
+			];
+
+			HallCube = new THREE.CubeTextureLoader().load(urls);
+			HallCube.format = THREE.RGBFormat;
+
+
+
+
+			//#region light
+			scene = new THREE.Scene();
+			sunlight = new THREE.DirectionalLight(0xff3300, 1.0); //（0xff3300）
+			//				sunlight.position.set( 0, 200, 100 );
+			sunlight.position.set(-100, 70, -250); //（ -100, 70, -250）
+			scene.add(sunlight);
+
+			light = new THREE.DirectionalLight(0xffffff, 0.65);
+			light.position.set(0, 100, 200);
+			scene.add(light);
+
+			pointLight = new THREE.PointLight(0xffffff, 0.65);
+			pointLight.position.set(0, 200, 100);
+			scene.add(pointLight);
+
+			pointLight1 = new THREE.PointLight(0xffffff, 0.85);
+			pointLight1.position.set(-100, 200, -200);
+			scene.add(pointLight1);
+
+			pointLight2 = new THREE.PointLight(0xffffff, 0.65);
+			pointLight2.position.set(100, 200, -200);
+			scene.add(pointLight2);
+			//#endregion
+
+			buttonInit();
+
+			var textureFlare0 = new THREE.TextureLoader().load('textures/lensflare/lensflare0.png');
+			var textureFlare3 = new THREE.TextureLoader().load('textures/lensflare/lensflare3.png');
+			var textureFlare1 = new THREE.TextureLoader().load('textures/lensflare/flare1.png');
+			var textureFlare2 = new THREE.TextureLoader().load('textures/lensflare/flare2.png');
+			var textureFlare4 = new THREE.TextureLoader().load('textures/lensflare/flare3.png');
+			lensflare = new THREE.Lensflare();
+			lensflare.position.set(-300, 90, -500);
+			lensflare.addElement(new THREE.LensflareElement(textureFlare0, 400, 0));
+			lensflare.addElement(new THREE.LensflareElement(textureFlare3, 60, 0.3, new THREE.Color(0x0000ff)));
+			lensflare.addElement(new THREE.LensflareElement(textureFlare3, 80, 0.4, new THREE.Color(0xff0000)));
+			lensflare.addElement(new THREE.LensflareElement(textureFlare4, 100, 0.6));
+			lensflare.addElement(new THREE.LensflareElement(textureFlare3, 120, 0.7, new THREE.Color(0x00ff00)));
+			lensflare.addElement(new THREE.LensflareElement(textureFlare2, 400, 0.8));
+			lensflare.addElement(new THREE.LensflareElement(textureFlare1, 200, 0.55));
+
+			scene.add(lensflare);
+			var lensflare1 = new THREE.Lensflare();
+			lensflare1.position.set(-41, 32, 88);
+			lensflare1.addElement(new THREE.LensflareElement(textureFlare0, 300, 0));
+
+			ReflectionMaterial = new THREE.MeshPhongMaterial({
+				color: 0x111111,
+				envMap: HallCube,
+				reflectivity: 1.0
+			});
+			CarPaintMaterial = new THREE.MeshPhongMaterial({
+				color: 0xffffff,
+				envMap: HallCube,
+				reflectivity: 1.0
+			});
+
+
+			RefractionMaterial = new THREE.MeshPhongMaterial({
+				color: 0x555555,
+				envMap: HallCube,
+				reflectivity: 1.0,
+				side: THREE.DoubleSide,
+				transparent: true,
+				opacity: 0.7
+			});
+			var HeadLightGlassMaterial = new THREE.MeshPhongMaterial({
+				color: 0xFFFFFF,
+				envMap: HallCube,
+				transparent: true,
+				opacity: 0.7
+			});
+			var TailLightGlassMaterial = new THREE.MeshPhongMaterial({
+				color: 0xFF0000,
+				envMap: HallCube
+			});
+
+			WheelMaterial = new THREE.MeshPhongMaterial({
+				color: 0x222222,
+				envMap: HallCube,
+				reflectivity: 1.0,
+				shininess: 30.0,
+				specular: 0x555555
+			});
+
+
+
+			var ShadowTex = new THREE.TextureLoader().load('textures/CarShadowGroundA.png');
+			var ShadowTexMaterial = new THREE.MeshBasicMaterial({
+				map: ShadowTex,
+				transparent: true
+			});
+			var TireTex = new THREE.TextureLoader().load('textures/CarTire.png');
+			var TireTexMaterial = new THREE.MeshPhongMaterial({
+				color: 0x555555,
+				specular: 0x000000,
+				map: TireTex
+			});
+			MirrorMaterial = new THREE.MeshPhongMaterial({
+				color: 0xffffff,
+				envMap: HallCube,
+				combine: THREE.MultiplyOperation,
+				reflectivity: 1.0
+			});
+
+
+
+
+
+			texture = new THREE.TextureLoader().load('textures/hdr/yard0.jpg');
+			//texture.rotation = 3.1415926 / 2.0;
+			texture.flipY = false;
+			var TextureMaterial = new THREE.MeshBasicMaterial({
+				map: texture
+			});
+			var loader = new THREE.GLTFLoader();
+			loader.load('models/gltf/SkyBox4.gltf', function (gltf) {
+
+				skymodel = gltf.scene;
+				skymodel.scale.set(800, 800, 800);
+				skymodel.position.set(0, 45, 0); //（0，9，0）
+				//	skymodel.rotation.y = 3.1415;
+
+				skymodel.getObjectByName('Sphere').material = TextureMaterial;
+				scene.add(skymodel);
+				skymodel.traverse(function (child) {
+					if (child.isMesh) {
+						//					child.receiveShadow = true;
+
+					}
+				});
+
+
+			});
+
+
+
+
+			loader.load('models/gltf/MyCar-High.gltf', function (gltf) {
+
+				model = gltf.scene;
+				model.scale.set(30, 30, 30);
+				model.position.set(0, 20, 0);
+
+				model.getObjectByName('BackCover').material = ReflectionMaterial;
+				model.getObjectByName('RightDoor').material = CarPaintMaterial;
+				model.getObjectByName('LeftDoor').material = CarPaintMaterial;
+				model.getObjectByName('FrontBody').material = CarPaintMaterial;
+
+				model.getObjectByName('FrontGlass').material = RefractionMaterial;
+
+				model.getObjectByName('LeftGlass').material = RefractionMaterial;
+				//					model.getObjectByName('LeftGlass').visible = false;
+				model.getObjectByName('RightGlass').material = RefractionMaterial;
+				model.getObjectByName('LeftFrontGlass').material = RefractionMaterial;
+				model.getObjectByName('RightFrontGlass').material = RefractionMaterial;
+				//					model.getObjectByName('RightGlass').visible = false;
+
+				model.getObjectByName('BackGlass').material = RefractionMaterial;
+				model.getObjectByName('CeilGlass').material = RefractionMaterial;
+				model.getObjectByName('RearGlass').material = RefractionMaterial;
+				model.getObjectByName('HeadLightGlass').material = HeadLightGlassMaterial;
+
+				model.getObjectByName('RimInnerLF').material = WheelMaterial;
+				model.getObjectByName('RimInnerLR').material = WheelMaterial;
+				model.getObjectByName('RimInnerRF').material = WheelMaterial;
+				model.getObjectByName('RimInnerRR').material = WheelMaterial;
+
+				model.getObjectByName('LRTire').material = TireTexMaterial;
+				model.getObjectByName('LFTire').material = TireTexMaterial;
+				model.getObjectByName('RRTire').material = TireTexMaterial;
+				model.getObjectByName('RFTire').material = TireTexMaterial;
+
+				model.getObjectByName('BackAirPass').material = ReflectionMaterial;
+				model.getObjectByName('Ceil').material = ReflectionMaterial;
+
+				model.getObjectByName('WindKnife').material = ReflectionMaterial;
+				model.getObjectByName('Spoiler').material = CarPaintMaterial;
+				model.getObjectByName('FrontBoard').material = ReflectionMaterial;
+				model.getObjectByName('Bpiller').material = ReflectionMaterial;
+				model.getObjectByName('Apillar').material = ReflectionMaterial;
+				model.getObjectByName('UnderCover').material = ReflectionMaterial;
+				model.getObjectByName('AirPass').material = ReflectionMaterial;
+				model.getObjectByName('Defuser').material = ReflectionMaterial;
+				model.getObjectByName('AirPass1').material = ReflectionMaterial;
+
+				//				model.getObjectByName('LightInner').material = chromeMaterial;
+				//					model.getObjectByName('Exsaust').material = chromeMaterial;
+
+				model.getObjectByName('RearviewRightGlass').material = MirrorMaterial;
+				model.getObjectByName('RearviewLeftGlass').material = MirrorMaterial;
+				model.getObjectByName('RearViewGlass').material = MirrorMaterial;
+				//				model.getObjectByName('LightInner').material = MirrorMaterial;
+
+				model.getObjectByName('TailLights').material = TailLightGlassMaterial;
+
+				model.getObjectByName('ShadowPlane').material = ShadowTexMaterial;
+
+				scene.add(model);
+
+				mixer = new THREE.AnimationMixer(model);
+
+				for (var i = 0; i < gltf.animations.length; i++) {
+					actions[i] = mixer.clipAction(gltf.animations[i]);
+					if (gltf.animations[i].name === 'BackCover' || gltf.animations[i].name === 'Ceil' || gltf
+						.animations[i].name === 'Piller' || gltf.animations[i].name === 'Piller2' || gltf.animations[
+							i].name === 'Piller3' || gltf.animations[i].name === 'Piller4') {
+						ceilOpenActions[ceilActionCount] = i;
+						ceilActionCount++;
+					} else if (gltf.animations[i].name === 'LeftDoor') {
+						doorOpenActions[doorActionCount] = i;
+						doorActionCount++;
+
+						LdoorOpenAction = mixer.clipAction(gltf.animations[i]);
+						LdoorOpenAction.clampWhenFinished = true;
+						LdoorOpenAction.repetitions = 1;
+						//				LdoorCloseAction.timeScale = 1;
+						LdoorCloseAction = mixer.clipAction(gltf.animations[i]);
+						LdoorCloseAction.clampWhenFinished = true;
+						LdoorCloseAction.repetitions = 1;
+						//				LdoorCloseAction.timeScale = -1;
+
+					} else if (gltf.animations[i].name === 'RightDoor') {
+						RdoorOpenActions[RdoorActionCount] = i;
+						RdoorActionCount++;
+					} else if (gltf.animations[i].name === 'LeftGlassAction') {
+						LeftGlassActions[LeftGlassCount] = i;
+						LeftGlassCount++;
+					} else if (gltf.animations[i].name === 'RightGlassAction') {
+						RightGlassActions[RightGlassCount] = i;
+						RightGlassCount++;
+					} else if (gltf.animations[i].name === 'Spoiler' || gltf.animations[i].name === 'SpoilerPillar') {
+						spoilerActions[spoilerActionCount] = i;
+						spoilerActionCount++;
+					} else if (gltf.animations[i].name === 'RightFrontWheelAction') {
+						action = mixer.clipAction(gltf.animations[i]);
+						action.setDuration(0.5);
+						//							action.play();
+					}
+				}
+
+			}, undefined, function (e) {
+				console.error(e);
+			});
+
+
+			renderer = new THREE.WebGLRenderer({
+				antialias: true,
+				alpha: true
+			});
+			renderer.setPixelRatio(window.devicePixelRatio);
+			renderer.setSize(window.innerWidth, window.innerHeight);
+			renderer.gammaOutput = true;
+			renderer.toneMappingExposure = 1.0;
+			container.appendChild(renderer.domElement);
+
+			controls = new THREE.OrbitControls(camera, renderer.domElement);
+			controls.rotateSpeed = 0.3;
+			controls.target.set(0, 0, 0);
+			controls.enablePan = false;
+			//				controls.enableZoom = false;
+			controls.minPolarAngle = 0.0;
+			controls.maxPolarAngle = 1.4952; //3.14 / 2.1;
+			controls.minDistance = 220;
+			controls.maxDistance = 350;
+			controls.update();
+			//			controls.enabled = false;
+
+
+			raycaster = new THREE.Raycaster();
+			mouse = new THREE.Vector2();
+
+			window.addEventListener('click', onMouseClick, false);
+
+			window.addEventListener('resize', onWindowResize, false);
+
+
+
+			viewSwitchInit();
+			colorChangeInit();
+
+
+		}
+
+		function buttonInit() {
+
+			//切换
+			var buttonTex = new THREE.TextureLoader().load('textures/Button.png');
+			var buttonMaterial = new THREE.MeshBasicMaterial({
+				map: buttonTex,
+				transparent: true,
+				side: THREE.DoubleSide
+			});
+			var InCarButtonMaterial = new THREE.MeshBasicMaterial({
+				map: buttonTex,
+				transparent: true,
+				side: THREE.DoubleSide,
+				opacity: 0
+			});
+
+
+			doorButton = new THREE.Mesh(new THREE.PlaneBufferGeometry(8, 8), buttonMaterial);
+			doorButton.position.set(52, 40, -30);
+			doorButton.name = "Ldoor";
+			RdoorButton = new THREE.Mesh(new THREE.PlaneBufferGeometry(8, 8), buttonMaterial);
+			RdoorButton.position.set(-52, 40, -30);
+			RdoorButton.name = "Rdoor";
+			//				planeMesh.visible = false;
+			spoilerButton = new THREE.Mesh(new THREE.PlaneBufferGeometry(8, 8), buttonMaterial);
+			spoilerButton.position.set(0, 57, -130);
+			spoilerButton.name = "spoiler";
+			ceilButton = new THREE.Mesh(new THREE.PlaneBufferGeometry(8, 8), buttonMaterial);
+			ceilButton.position.set(0, 65, 0);
+			ceilButton.name = "ceil";
+
+			ceilInCarButton = new THREE.Mesh(new THREE.PlaneBufferGeometry(2, 2), InCarButtonMaterial);
+			ceilInCarButton.position.set(0, 57, -6);
+			ceilInCarButton.name = "ceil";
+
+			LGlassButton = new THREE.Mesh(new THREE.PlaneBufferGeometry(2, 2), InCarButtonMaterial);
+			LGlassButton.position.set(35, 36, -13);
+			LGlassButton.name = "LGlassButton";
+
+			RGlassButton = new THREE.Mesh(new THREE.PlaneBufferGeometry(3, 3), InCarButtonMaterial);
+			RGlassButton.position.set(-33, 33, -10);
+			RGlassButton.name = "RGlassButton";
+
+			InCarLDoorButton = new THREE.Mesh(new THREE.PlaneBufferGeometry(2, 2), InCarButtonMaterial);
+			InCarLDoorButton.position.set(33, 40, -6);
+			InCarLDoorButton.name = "Ldoor";
+
+			InCarRDoorButton = new THREE.Mesh(new THREE.PlaneBufferGeometry(3, 3), InCarButtonMaterial);
+			InCarRDoorButton.position.set(-33, 38, 0);
+			InCarRDoorButton.name = "Rdoor";
+
+			//	model.getObjectByName('LeftDoor');
+			//		scene.add( doorButton );
+
+			scene.add(doorButton);
+			scene.add(RdoorButton);
+			scene.add(spoilerButton);
+			scene.add(ceilButton);
+			scene.add(LGlassButton);
+			scene.add(RGlassButton);
+			scene.add(ceilInCarButton);
+			scene.add(InCarLDoorButton);
+			scene.add(InCarRDoorButton);
+
+
+			ceilInCarButton.visible = false;
+			LGlassButton.visible = false;
+			RGlassButton.visible = false;
+			InCarLDoorButton.visible = false;
+			InCarRDoorButton.visible = false;
+
+			buttonTween = new TWEEN.Tween(buttonMaterial).to({
+				opacity: 0
+			}, 500);
+			buttonTween.easing(TWEEN.Easing.Linear.None);
+			buttonTween.onComplete(onCompleted);
+			//		buttonTween.onUpdate(onCompleted);
+			function onCompleted() {
+				doorButton.visible = false;
+				RdoorButton.visible = false;
+				spoilerButton.visible = false;
+				ceilButton.visible = false;
+			}
+
+			inCarButtonTween = new TWEEN.Tween(InCarButtonMaterial).to({
+				opacity: 1
+			}, 500);
+			inCarButtonTween.easing(TWEEN.Easing.Linear.None);
+			inCarButtonTween.onStart(onInCarStart);
+
+			function onInCarStart() {
+				ceilInCarButton.visible = true;
+				LGlassButton.visible = true;
+				RGlassButton.visible = true;
+				InCarLDoorButton.visible = true;
+				InCarRDoorButton.visible = true;
+			}
+
+			buttonTweenBack = new TWEEN.Tween(buttonMaterial).to({
+				opacity: 1
+			}, 500);
+			buttonTweenBack.easing(TWEEN.Easing.Linear.None);
+			buttonTweenBack.onStart(onStart);
+
+			function onStart() {
+				doorButton.visible = true;
+				RdoorButton.visible = true;
+				spoilerButton.visible = true;
+				ceilButton.visible = true;
+			}
+
+			inCarButtonTweenBack = new TWEEN.Tween(InCarButtonMaterial).to({
+				opacity: 0
+			}, 500);
+			inCarButtonTweenBack.easing(TWEEN.Easing.Linear.None);
+			inCarButtonTweenBack.onComplete(onInCarBackComplete);
+
+			function onInCarBackComplete() {
+				ceilInCarButton.visible = false;
+				LGlassButton.visible = false;
+				RGlassButton.visible = false;
+				InCarLDoorButton.visible = false;
+				InCarRDoorButton.visible = false;
+			}
+
+
+
+		}
+
+		function viewSwitchInit() {
+
+			cameraTween = new TWEEN.Tween(camera.position).to({
+				x: 80,
+				y: 70,
+				z: -40
+			}, 1000);
+			cameraTween.easing(TWEEN.Easing.Quadratic.In);
+			cameraTween.onUpdate(cameraInOnUpdate);
+
+			var cameraTween1 = new TWEEN.Tween(camera.position).to({
+				x: 20,
+				y: 50,
+				z: -29
+			}, 1000);
+			cameraTween1.easing(TWEEN.Easing.Quadratic.Out);
+			cameraTween1.onUpdate(cameraInOnUpdate);
+
+			cameraInTarget = new TWEEN.Tween(camera.target).to({
+				x: 20,
+				y: 50,
+				z: -10
+			}, 2000);
+			cameraInTarget.easing(TWEEN.Easing.Quadratic.InOut);
+
+			cameraTweenBack = new TWEEN.Tween(camera.position).to({
+				x: 90,
+				y: 70,
+				z: -40
+			}, 1000);
+			cameraTweenBack.easing(TWEEN.Easing.Quadratic.In);
+			//				cameraTweenBack.delay(1200);
+			cameraTweenBack.onUpdate(cameraOutOnUpdate);
+			cameraTweenBack.onStart(cameraOutOnstart);
+
+			var cameraTweenBack1 = new TWEEN.Tween(camera.position).to({
+				x: 100,
+				y: 70,
+				z: 200
+			}, 1500);
+			cameraTweenBack1.easing(TWEEN.Easing.Quadratic.Out);
+			cameraTweenBack1.onUpdate(cameraOutOnUpdate);
+
+			cameraOutTarget = new TWEEN.Tween(camera.position).to({
+				x: 0,
+				y: 0,
+				z: 0
+			}, 2000);
+			cameraOutTarget.easing(TWEEN.Easing.Quadratic.InOut);
+
+			cameraTween.chain(cameraTween1);
+			cameraTweenBack.chain(cameraTweenBack1);
+
+			function cameraOutOnstart() {
+				if (doorStatus === 0) {
+					closeDelay = 1500;
+				} else {
+					closeDelay = 0;
+				}
+
+			}
+
+			function cameraInOnUpdate() {
+				camera.lookAt(20, 50, -10);
+			}
+
+			function cameraOutOnUpdate() {
+				camera.lookAt(50, 35, 100);
+			}
+		}
+
+		function colorChangeInit() {
+
+			BlackMatTween = new TWEEN.Tween(CarColor).to({
+				r: 11,
+				g: 11,
+				b: 11
+
+			}, 500);
+			BlackMatTween.easing(TWEEN.Easing.Linear.None);
+			BlackMatTween.onUpdate(CarColorUpdate);
+
+			WhiteMatTween = new TWEEN.Tween(CarColor).to({
+				r: 256,
+				g: 256,
+				b: 256
+
+			}, 500);
+			WhiteMatTween.easing(TWEEN.Easing.Linear.None);
+			WhiteMatTween.onUpdate(CarColorUpdate);
+
+			BlueMatTween = new TWEEN.Tween(CarColor).to({
+				r: 0,
+				g: 0,
+				b: 200
+
+			}, 500);
+			BlueMatTween.easing(TWEEN.Easing.Linear.None);
+			BlueMatTween.onUpdate(CarColorUpdate);
+
+			RedMatTween = new TWEEN.Tween(CarColor).to({
+				r: 256,
+				g: 0,
+				b: 0
+
+			}, 500);
+			RedMatTween.easing(TWEEN.Easing.Linear.None);
+			RedMatTween.onUpdate(CarColorUpdate);
+
+			GoldMatTween = new TWEEN.Tween(CarColor).to({
+				r: 256,
+				g: 150,
+				b: 0
+
+			}, 500);
+			GoldMatTween.easing(TWEEN.Easing.Linear.None);
+			GoldMatTween.onUpdate(CarColorUpdate);
+
+			function CarColorUpdate() {
+				CarPaintMaterial.color.setRGB(CarColor.r / 256, CarColor.g / 256, CarColor.b / 256);
+			}
+
+
+
+		}
+
+		function viewChange() {
+			if (viewChangeStatus === 0) {
+				cameraTween.start();
+				//						cameraInTarget.start();
+				controls.target.set(20, 50, -28);
+				controls.enableZoom = false;
+				controls.maxPolarAngle = Math.PI;
+				controls.minDistance = 0;
+				viewChangeStatus = 1;
+				setTimeout(doorControl, 2000);
+				if (doorStatus === 0) {
+					doorControl();
+				}
+
+			} else {
+				cameraTweenBack.start();
+				//						cameraOutTarget.start();
+				controls.target.set(0, 0, 0);
+				controls.enableZoom = true;
+				controls.maxPolarAngle = 1.4952;
+				controls.minDistance = 220;
+				viewChangeStatus = 0;
+				setTimeout(doorControl, 2000);
+				if (doorStatus === 0) {
+					doorControl();
+				}
+
+			}
+			//				buttonChangeLock = 1;
+			//					setTimeout(unlockButtonChangeLock , 3000)
+
+		}
+
+		function unlockButtonChangeLock() {
+			buttonChangeLock = 0;
+		}
+
+		function buttonChange() {
+
+			if (viewChangeStatus === 0) {
+				if (buttonStatus === 1) {
+					buttonTween.start();
+					inCarButtonTween.start();
+				}
+
+			} else {
+				if (buttonStatus === 1) {
+					buttonTweenBack.start();
+					inCarButtonTweenBack.start();
+				}
+
+			}
+			//				setTimeout(unlockButtonChangeLock , 550)
+
+		}
+
+		function toggleButton() {
+			if (buttonStatus === 1) {
+
+				if (viewChangeStatus === 1) {
+					inCarButtonTweenBack.start();
+				} else {
+					buttonTween.start();
+				}
+				buttonStatus = 0;
+			} else {
+				if (viewChangeStatus === 1) {
+					inCarButtonTween.start();
+				} else {
+					buttonTweenBack.start();
+				}
+				buttonStatus = 1;
+			}
+		}
+
+		function TurnToBlack() {
+			BlackMatTween.start();
+		}
+
+		function TurnToWhite() {
+			WhiteMatTween.start();
+		}
+
+		function TurnToBlue() {
+			BlueMatTween.start();
+		}
+
+		function TurnToRed() {
+			RedMatTween.start();
+		}
+
+		function TurnToGold() {
+			GoldMatTween.start();
+		}
+
+		function viewSwitch() {
+			if (buttonChangeLock === 0) {
+				buttonChangeLock = 1;
+				buttonChange();
+				setTimeout(unlockButtonChangeLock, 3000);
+				viewChange();
+
+			}
+
+		}
+
+		function onMouseClick(event) {
+
+			mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+			mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+			raycaster.setFromCamera(mouse, camera);
+
+			var intersects = raycaster.intersectObjects(scene.children);
+
+			if (intersects.length > 0) {
+				if ((intersects[0].object.name) === "Ldoor") {
+					doorControl();
+				} else if ((intersects[0].object.name) === "Rdoor") {
+					RdoorControl();
+				} else if ((intersects[0].object.name) === "spoiler") {
+					spoilerControl();
+				} else if ((intersects[0].object.name) === "ceil") {
+					ceilControl();
+				} else if ((intersects[0].object.name) === "LGlassButton") {
+					LGlassControl();
+				} else if ((intersects[0].object.name) === "RGlassButton") {
+					RGlassControl();
+				}
+			}
+
+			/*		for ( var i = 0; i < intersects.length; i++ ) {
+
+			//					intersects[ i ].object.material.color.set( 0xff0000 );
+								console.log(intersects[ 0].object.name);
+								doorControl();
+
+							}
+			*/
+		}
+
+		function onWindowResize() {
+
+			camera.aspect = window.innerWidth / window.innerHeight;
+			camera.updateProjectionMatrix();
+			renderer.setSize(window.innerWidth, window.innerHeight);
+
+		}
+
+		function changeStatus(n) {
+			if (n === 0) {
+				return 1;
+			} else {
+				return 0;
+			}
+		}
+		//
+		function ceilControl() {
+			ceilStatus = changeStatus(ceilStatus);
+			for (var i = 0; i <= ceilActionCount; i++) {
+				playOnce(ceilOpenActions[i], ceilStatus);
+			}
+
+		}
+
+		function doorControl() {
+			if (doorStatus === 0) {
+				LdoorOpenAction.reset();
+				LdoorOpenAction.timeScale = 1;
+				LdoorOpenAction.play();
+			} else {
+				LdoorCloseAction.reset();
+				LdoorCloseAction.timeScale = -1;
+				LdoorCloseAction.play();
+			}
+
+			doorStatus = changeStatus(doorStatus);
+			/*
+			for(var i = 0;i <= doorActionCount;i++)
+			{
+				playOnce(doorOpenActions[i] , doorStatus);
+			}*/
+
+		}
+
+		function RdoorControl() {
+			RdoorStatus = changeStatus(RdoorStatus);
+			for (var i = 0; i <= RdoorActionCount; i++) {
+				playOnce(RdoorOpenActions[i], RdoorStatus);
+			}
+
+		}
+
+		function LGlassControl() {
+			LGlassStatus = changeStatus(LGlassStatus);
+			for (var i = 0; i <= LeftGlassCount; i++) {
+				playOnce(LeftGlassActions[i], LGlassStatus);
+			}
+
+		}
+
+		function RGlassControl() {
+			RGlassStatus = changeStatus(RGlassStatus);
+			for (var i = 0; i <= RightGlassCount; i++) {
+				playOnce(RightGlassActions[i], RGlassStatus);
+			}
+
+		}
+
+		function spoilerControl() {
+			spoilerStatus = changeStatus(spoilerStatus);
+			//				playOnce(spoilerAction,spoilerStatus);
+			for (var i = 0; i <= spoilerActionCount; i++) {
+				playOnce(spoilerActions[i], spoilerStatus);
+			}
+		}
+
+		function playOnce(n, currentStatus) {
+
+			actions[n].reset();
+
+			actions[n].clampWhenFinished = true;
+			actions[n].repetitions = 1;
+
+			if (currentStatus === 0) {
+				actions[n].timeScale = -1;
+			} else {
+				actions[n].timeScale = 1;
+			}
+			actions[n].play();
+		}
+
+		function animate() {
+			TWEEN.update();
+			requestAnimationFrame(animate);
+
+			delta = clock.getDelta();
+
+			mixer.update(delta);
+
+			doorButton.lookAt(camera.position);
+			RdoorButton.lookAt(camera.position);
+			spoilerButton.lookAt(camera.position);
+			ceilButton.lookAt(camera.position);
+			LGlassButton.lookAt(camera.position);
+			RGlassButton.lookAt(camera.position);
+			ceilInCarButton.lookAt(camera.position);
+			InCarLDoorButton.lookAt(camera.position);
+			InCarRDoorButton.lookAt(camera.position);
+
+
+			renderer.render(scene, camera);
+
+
+		}
+		window.onload = function () {
+
+		}
+	</script>
+
+</body>
+
+</html>
